@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 const V = {
   blue1: "#1A3A7A", blue2: "#2B6BC4", blue3: "#4FA8D8",
@@ -83,7 +83,7 @@ function Field({ label, value, onChange, prefix, suffix, step=1 }) {
 function ProductCard({ product, data, onChange, onRemove, isCustom }) {
   const [open, setOpen] = useState(true);
   const c = calc(data);
-  const rows = [["Product Cost",c.productCost],["Frakt / Freight",c.shipping],[`Tull / Duty (${data.dutyRate}%)`,c.duty],[`Försäkring (${data.insuranceRate}%)`,c.insurance],["Godshantering",c.handling],["Sista milen",c.lastMile],[`Moms / VAT (${data.vatRate}%)`,c.vat]];
+  const rows = [["Product Cost",c.productCost],["Frakt / Freight",c.shipping],[`Tull / Duty (${data.dutyRate}%)`,c.duty],[`Forsakring (${data.insuranceRate}%)`,c.insurance],["Godshantering",c.handling],["Sista milen",c.lastMile],[`Moms / VAT (${data.vatRate}%)`,c.vat]];
   return (
     <div style={{ background:V.white, border:`1px solid ${V.border}`, borderRadius:12, marginTop:16, overflow:"hidden", opacity: data.enabled ? 1 : 0.45, boxShadow:"0 4px 20px rgba(43,107,196,0.06)" }}>
       <div style={{ height:4, background:`linear-gradient(90deg,${V.blue1},${V.blue2},${V.blue3})` }}/>
@@ -181,9 +181,30 @@ function AddProductModal({ onAdd, onClose }) {
 }
 
 export default function VeraLandedCost() {
-  const [products, setProducts] = useState(DEFAULT_PRODUCTS);
-  const [data, setData] = useState(initData);
+  const [products, setProducts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("vera_products");
+      return saved ? JSON.parse(saved) : DEFAULT_PRODUCTS;
+    } catch { return DEFAULT_PRODUCTS; }
+  });
+
+  const [data, setData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("vera_data");
+      return saved ? JSON.parse(saved) : initData();
+    } catch { return initData(); }
+  });
+
   const [showModal, setShowModal] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Auto-save whenever data or products change
+  useEffect(() => {
+    try {
+      localStorage.setItem("vera_products", JSON.stringify(products));
+      localStorage.setItem("vera_data", JSON.stringify(data));
+    } catch {}
+  }, [products, data]);
 
   const handleChange = useCallback((pid, key, val) => {
     setData(prev => ({ ...prev, [pid]: { ...prev[pid], [key]: val } }));
@@ -197,6 +218,13 @@ export default function VeraLandedCost() {
   const handleRemoveProduct = (pid) => {
     setProducts(prev => prev.filter(p => p.id !== pid));
     setData(prev => { const n = {...prev}; delete n[pid]; return n; });
+  };
+
+  const handleReset = () => {
+    if (confirm("Reset all data to defaults?")) {
+      setProducts(DEFAULT_PRODUCTS);
+      setData(initData());
+    }
   };
 
   const enabled = products.filter(p => data[p.id]?.enabled);
@@ -232,7 +260,7 @@ export default function VeraLandedCost() {
             <VeraLogo/>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:20, color:V.white, letterSpacing:"0.1em", textTransform:"uppercase" }}>Landed Cost Calculator</div>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", letterSpacing:"0.2em", marginTop:2 }}>IMPORT COST ANALYSIS · USD</div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", letterSpacing:"0.2em", marginTop:2 }}>IMPORT COST ANALYSIS · USD · AUTO-SAVED</div>
             </div>
           </div>
           <div style={{ display:"flex", marginTop:20, height:3, borderRadius:2, overflow:"hidden" }}>
@@ -248,7 +276,10 @@ export default function VeraLandedCost() {
           <KpiCard label="Total Moms" value={`$${fmt(totVat)}`} sub="Swedish VAT 25%" accent={V.blue3}/>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0 0" }}>
-          <button onClick={() => setShowModal(true)} style={{ background:`linear-gradient(90deg,${V.blue2},${V.blue3})`, border:"none", borderRadius:6, color:V.white, cursor:"pointer", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:12, padding:"7px 16px", letterSpacing:"0.1em", textTransform:"uppercase" }}>+ Add Product</button>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => setShowModal(true)} style={{ background:`linear-gradient(90deg,${V.blue2},${V.blue3})`, border:"none", borderRadius:6, color:V.white, cursor:"pointer", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:12, padding:"7px 16px", letterSpacing:"0.1em", textTransform:"uppercase" }}>+ Add Product</button>
+            <button onClick={handleReset} style={{ background:"none", border:"1px solid #ffcccc", borderRadius:6, color:"#cc4444", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:9, padding:"7px 12px", letterSpacing:"0.1em" }}>↺ Reset</button>
+          </div>
           <button onClick={() => { const allOn=products.every(p=>data[p.id]?.enabled); setData(prev => { const n={...prev}; products.forEach(p=>{if(n[p.id])n[p.id]={...n[p.id],enabled:!allOn};}); return n; }); }} style={{ background:V.white, border:`1px solid ${V.border}`, borderRadius:5, color:V.muted, cursor:"pointer", fontSize:9, padding:"5px 12px", letterSpacing:"0.15em", fontFamily:"'DM Mono',monospace" }}>{products.every(p=>data[p.id]?.enabled)?"COLLAPSE ALL":"EXPAND ALL"}</button>
         </div>
         {products.map(p => (
